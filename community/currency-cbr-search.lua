@@ -39,7 +39,7 @@ function on_search(inp)
 	    y = 2000 + y%100
 	end
 	dat = os.date("%d.%m.%Y",os.time{day=d,month=m,year=y})
-	search:show({"Курс "..cur.." "..dat},{red})
+	search:show_buttons({"Курс "..cur.." "..dat},{red})
 end
 
 function on_click()
@@ -47,7 +47,7 @@ function on_click()
 	    http:get("https://www.cbr.ru/scripts/XML_daily.asp?date_req="..dat:replace("%.","/"))
 	    return false
 	else
-	    system:copy_to_clipboard(val)
+	    system:to_clipboard(val)
 	    return true
 	end
 end
@@ -56,15 +56,15 @@ function on_network_result(res)
     local t = xml:parse(res)
 	for i,v in ipairs(t.ValCurs.Valute) do
 		if v.CharCode:value() == cur then
-			search:show({t.ValCurs["@Date"],v.Nominal:value().." "..v.CharCode:value().." = "..v.Value:value():replace(",",".").." RUB"},{red,red})
+			search:show_buttons({t.ValCurs["@Date"],v.Nominal:value().." "..v.CharCode:value().." = "..v.Value:value():replace(",",".").." RUB"},{red,red})
 			val = v.Value:value()
 			return
 		end
 	end
-	search:show({"Нет данных по валюте "..cur},{red})
+	search:show_buttons({"Нет данных по валюте "..cur},{red})
 end
 
 function on_long_click()
-	system:copy_to_clipboard(val)
+	system:to_clipboard(val)
 	return true
 end

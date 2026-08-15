@@ -10,14 +10,37 @@ local json = require "json"
 local fmt = require "fmt"
 
 function on_alarm()
-    local location=system:location()
-    local url="https://api.sunrise-sunset.org/json?lat="..location[1].."&lng="..location[2].."&formatted=0"
+    local location = system:location()
+
+    if location == nil then
+        return
+    elseif location == "permission_error" then
+        ui:show_text("No location permission")
+        return
+    end
+
+    local url = "https://api.sunrise-sunset.org/json?lat=" .. location[1] .. "&lng=" .. location[2] .. "&formatted=0"
 
     http:get(url)
 end
 
-function on_network_result(result)
-    local t = json.decode(result)
+function on_network_result(result, code)
+    if code < 200 or code > 299 then
+        ui:show_text("Network error: "..code)
+        return
+    end
+
+    ok, t = pcall(json.decode, result)
+
+    if not ok or type(t) ~= "table" then
+        ui:show_text("Invalid data: "..result)
+        return
+    end
+
+    if not t or not t.results or not t.results.sunrise or not t.results.sunset then
+        ui:show_text("%%txt%% Got invalid data:\n"..serialize(t))
+        return
+    end
 
     local sunrise_time = utc_to_local(parse_iso8601_datetime(t.results.sunrise))
     local sunset_time = utc_to_local(parse_iso8601_datetime(t.results.sunset))

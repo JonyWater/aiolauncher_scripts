@@ -2,7 +2,7 @@
 -- description = "Monthly calendar with system calendar events"
 -- type = "widget"
 -- author = "Andrey Gavrilov"
--- version = "3.1"
+-- version = "3.3"
 
 local tab = {}
 local line = " "
@@ -14,16 +14,15 @@ local year = os.date("%Y"):gsub("^0","")
 local month = os.date("%m"):gsub("^0","")
 local day = os.date("%d"):gsub("^0","")
 
-function on_resume()
-    if widget_type == "text" then
-        return
-    end
-	--ui:set_folding_flag(true)
-	ui:show_table(table_to_tables(tab,8),0, true, line)
-	widget_type = "table"
+function event_begin(event)
+	return event.begin_time or event.begin
 end
 
-function on_alarm()
+function event_end(event)
+	return event.end_time or event["end"]
+end
+
+function on_resume()
     if calendar:events(0,0) == "permission_error" then
         widget_type = "text"
         ui:show_text("Click to grant permission")
@@ -41,7 +40,7 @@ end
 
 function on_settings()
 	dialog_id = "settings"
-	ui:show_checkbox_dialog("Check calendars", get_all_cals()[3],cal_id_to_id(settings:get()))
+	dialogs:show_checkbox_dialog("Check calendars", get_all_cals()[3],cal_id_to_id(settings:get()))
 end
 
 function on_click(i)
@@ -51,16 +50,16 @@ function on_click(i)
 			local time = os.time{year=year,month=month,day=1}-24*60*60
 			year,month = os.date("%Y-%m",time):match("(%d+)-(%d+)")
 			year,month = year:gsub("^0",""),month:gsub("^0","")
-			on_alarm()
+			on_resume()
 		elseif i == 8 then
 			system:vibrate(10)
 			local time = os.time{year=year,month=month,day=1}+31*24*60*60
 			year,month = os.date("%Y-%m",time):match("(%d+)-(%d+)")
 			year,month = year:gsub("^0",""),month:gsub("^0","")
-			on_alarm()
+			on_resume()
 		elseif i > 1 and i < 8 then
 			dialog_id = "date"
-			ui:show_edit_dialog("Enter month and year", "Format - 12.2020. Empty value - current month", string.format("%02d.%04d", month, year))
+			dialogs:show_edit_dialog("Enter month and year", "Format - 12.2020. Empty value - current month", string.format("%02d.%04d", month, year))
 			return
 		elseif (i-1)%8 ~= 0 and tab[i] ~= " " then
 			day = tab[i]:match(">(%d+)<"):gsub("^0","")
@@ -86,7 +85,7 @@ function on_click(i)
 end
 
 function on_permission_granted()
-    on_alarm()
+    on_resume()
 end
 
 function on_dialog_action(data)
@@ -104,7 +103,7 @@ function on_dialog_action(data)
 				return
 			end
 			year,month = y,m
-			on_alarm()
+			on_resume()
 			return
 		elseif not check_date(data) then
 			return
@@ -117,15 +116,15 @@ function on_dialog_action(data)
 		end
 		month,year = data:match("(%d+)%.(%d+)")
 		month,year = month:gsub("^0",""),year:gsub("^0","")
-		on_alarm()
+		on_resume()
 	elseif dialog_id == "settings" then
 		settings:set(id_to_cal_id(data))
-		on_alarm()
+		on_resume()
 	end
 end
 
 function get_cal(y,m)
-	local color = ui:colors()
+	local color = aio:colors()
 	local events = get_my_events(y,m,0)
 	local from = os.time{year=y,month=m,day=1}
 	local tab = {
@@ -160,13 +159,13 @@ function get_cal(y,m)
 end
 
 function format_day(y,m,d,events)
-	local color = ui:colors()
+	local color = aio:colors()
 	local from = os.time{year=y,month=m,day=d,hour=0,min=0,sec=0}
 	local to = os.time{year=y,month=m,day=d,hour=23,min=59,sec=59}
 	local yes = false
 	for i=1,#events do
 		local v = events[i]
-		if v.begin >= from and v["end"] <= to then
+		if event_begin(v) >= from and event_end(v) <= to then
 			yes = true
 			break
 		end
@@ -177,7 +176,7 @@ function format_day(y,m,d,events)
 	end
 	if year == os.date("%Y"):gsub("^0","") and month == os.date("%m"):gsub("^0","") and d == os.date("%d"):gsub("^0","") then
 		dd = "<font color=\""..color.progress_good.."\">"..dd.."</font>"
-	elseif os.date("%w",from):gsub("0","7")-5 > 0 then
+	elseif calendar.is_holiday and calendar:is_holiday(os.time{year=y,month=m,day=d}) then
 		dd = "<font color=\""..color.progress_bad.."\">"..dd.."</font>"
 	else
 		dd = "<font color=\""..color.primary_text.."\">"..dd.."</font>"
@@ -225,11 +224,11 @@ function get_my_events(y,m,d)
 	end
 	for i=1,#events do
 		local v = events[i]
-		if v.begin >= from and v["end"] <= to then
+		if event_begin(v) >= from and event_end(v) <= to then
 			v["calendar_name"],v["calendar_color"]=get_my_calendar(v.calendar_id)
 			table.insert(tab,v)
 		end
-		if v.begin > to then
+		if event_begin(v) > to then
 			break
 		end
 	end
@@ -263,14 +262,14 @@ end
 function get_day_tab(events)
 	local tab = {}
 	for i,v in ipairs(events) do
-		local t = {v.id, v.all_day, os.date("%H:%M",v.begin), os.date("%H:%M",v["end"]), v.title, v.description, v.location, v.calendar_name, v.calendar_color}
+		local t = {v.id, v.all_day, os.date("%H:%M",event_begin(v)), os.date("%H:%M",event_end(v)), v.title, v.description, v.location, v.calendar_name, v.calendar_color}
 		table.insert(tab,t)
 	end
 	return tab
 end
 
 function get_lines(events)
-	local color = ui:colors()
+	local color = aio:colors()
 	local lines = {}
 	for i,v in ipairs(events) do
 		table.insert(lines,"<font color = \""..v[9].."\">•</font>")

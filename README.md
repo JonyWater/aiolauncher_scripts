@@ -18,6 +18,7 @@ The type of script is determined by the line (meta tag) at the beginning of the 
 
 # Links
 
+* [Step-by-step guide to writing scripts for AIO Launcher](README_INTRO.md)
 * [AIO Scripting Telegram Group](https://t.me/aio_scripting)
 * [AIO Script Store app](https://play.google.com/store/apps/details?id=ru.execbit.aiostore)
 * [Lua Guide](https://www.lua.org/pil/contents.html)
@@ -25,19 +26,56 @@ The type of script is determined by the line (meta tag) at the beginning of the 
 
 # Changelog
 
-### 5.3.5
+### 7.4.0
 
-* Added `ai` module
+* Added `intent:open_uri()`, `intent:open_app_settings()`, and `intent:open_system_settings()` helpers
+* Added split network helpers: `system:internet_state()`, `system:active_network_state()`, `system:wifi_state()`, `system:mobile_state()`, and `system:bluetooth_state()`; `system:network_state()` is deprecated
 
-### 5.3.1
+### 7.2.0
 
-* Added `string:trim()`, `string:starts_with()` and `string:ends_with()` methods
+* Added `news` module for regional and world news
+* Added `weather:icon()` and inline weather icon markup (`%%weather:...%%`)
+* Dialog lines in `show_radio_dialog`, `show_checkbox_dialog`, and `show_list_dialog` now support icon markup (`%%fa:%%`, `%%fa-fw:%%`, `%%weather:%%`)
+* Inline icon markup is now consistent across rich text fields. Use `%%fa:...%%`, `%%fa-fw:...%%`, and `%%weather:...%%` in text, list, table, search line/button, drawer list, dialog, toast, and rich UI text/button fields. Use raw icon ids like `fa:name` or `weather:1:day` only in dedicated icon fields and icon-only controls.
+* Calendar event tables now use `begin_time` and `end_time` fields instead of `begin` and `end`
+* Added `usage` module for app usage statistics
+* Added `traffic` module for network traffic counters
+* Added `system:brightness_state()` and documented system table formats
+* Added recorder playback, per-record stop/delete/share, and transcription APIs
+* Added request-id based AI completion and audio transcription APIs
+* Added advanced player, notification, files, timer, profile, calendar, and app management APIs
 
-### 5.3.0
+### 7.0.5
 
-* Added `prefs:show_dialog` method
-* Added `system:show_notify()` and `system:cancel_notify()` methods
-* Added support for SVG icons to the Rich UI API
+* Added `http:set_certificate_verification()` function
+
+### 6.3.1
+
+* Added `search:chat_start()` and `search:chat_stop()` functions
+* `aio:send_message()` now can send messages to stoppend search and drawer script
+
+### 6.3.0
+
+* Added modules: `timers`, `player`, `currencies`, `finance`, `recorder`
+* Added `aio:show_toast()` function
+* `dialogs` module now available in the search- and drawer-scripts
+* `search` action now accepts initial text
+
+### 6.2.0
+
+* Added `countries` module
+* Added new actions: `start_record, stop_record, player_previous, player_next, player_pause, clear_notifications, add_calendar_event, start_timer, fold_widget, unfold_widget, cloud_backup`
+
+### 6.0.2
+
+* Added `aio:launcher_info()` method
+* Added `aio:open_notification_panel()` method
+* Added `aio:open_side_menu()` method
+* Added `aio:open_search()` method
+* Added `system:network_state()` method
+* Added `files:pick_file()` method
+* Added `profiles:current()` method
+* `http:get()` now returns headers
 
 [Full changelog](CHANGELOG.md)
 
@@ -50,7 +88,7 @@ The work of the widget script begins with one of the three described functions. 
 * `on_alarm()` - called every time you return to the desktop, but no more than once every 30 minutes.
 * `on_tick(ticks)` - called every second while the launcher is on the screen. The `ticks` parameter is number of seconds after last return to the launcher.
 
-The `on_resume()` and `on_alarm()` callbacks are also triggered when a widget is added to the screen (if `on_load()` is not defined) and the screen is forced to refresh.
+The `on_resume()` and `on_alarm()` callbacks are also triggered when a widget is added to the screen and when the screen is forced to refresh. Do not rely on `on_load()` suppressing them; keep loading callbacks idempotent.
 
 For most network scripts `on_alarm()` should be used.
 
@@ -64,12 +102,14 @@ Then the following function is triggered each time a character is entered:
 
 * `on_search(string)` is run when each character is entered, `string` - entered string.
 
-The search script can use two functions to display search results:
+The search script can use four functions to display search results:
 
-* `search:show_buttons(names, [colors], [top])` - show buttons in the search results, the first parameter is table of button names, second - table of button colors in format `#XXXXXX`, `top` - whether the results need to be shown at the top (false by default);
-* `search:show_lines(lines, [colors], [top])` - show text lines in the search results;
-* `search:show_progress(names, progresses, [colors], [top])` - show progress bars in the search results, the first parameter is a table of names, the second is a table of progress bars (from 1 to 100);
-* `search:show_chart(points, format, [title], [show_grid], [top])` - show chart in the search results, parameters are analogous to `ui:show_chart()`.
+* `search:show_buttons(names, [colors], [top])` - show rich text buttons in the search results, the first parameter is table of button names, second - table of button colors in format `#XXXXXX`, `top` - whether the results need to be shown at the top (false by default). Button labels support HTML, Markdown, and icon markup described in the Icons section;
+* `search:show_lines(lines, [colors], [top])` - show rich text lines in the search results. Lines support HTML, Markdown, and icon markup described in the Icons section;
+* `search:show_progress(names, progresses, [colors], [top])` - show progress bars in the search results, the first parameter is a table of rich text labels, the second is a table of progress bars;
+* `search:show_chart(points, format, [title], [show_grid], [top])` - show chart in the search results, parameters are analogous to `ui:show_chart()`. The optional title is rich text.
+
+Keep in mind that regardless of how many items you display in the search results, only the first three lines will be shown.
 
 When user click on a result, one of the following functions will be executed:
 
@@ -77,6 +117,28 @@ When user click on a result, one of the following functions will be executed:
 * `on_long_click(index)` - long-click.
 
 Both functions gets index of the clicked element (starting with 1) as an argument. Each function can return `true` or `false`, depending on whether the script wants to close the search window or not.
+
+## Chat mode in search scripts
+
+Search scripts can switch the search UI into a chat mode and handle a question-answer loop.
+
+* `search:chat_start([label], [initial_message], [icon])` - enable chat mode. `label` sets the chat header. `initial_message` (optional) is shown as the first assistant message. `icon` (optional) is a FontAwesome icon name like `fa:comment` and is used for the chat FAB button.
+* `search:chat_stop()` - disable chat mode and return to normal search results.
+
+The chat callback:
+
+* `on_chat(messages)` - called when user submits a message in chat mode. `messages` is a table of message tables, each with:
+  * `role` - `"user"`, `"assistant"`, `"system"`, or `"error"`;
+  * `content` - message text;
+  * `context` - optional extra context string.
+
+Return value of `on_chat`:
+
+* a string (single assistant reply), or
+* a table of strings (multiple assistant replies), or
+* a table of message tables `{ role = "...", content = "...", context = "..." }` to append multiple messages with explicit roles.
+
+To exit chat mode on a command, call `search:chat_stop()`.
 
 If you want the script to respond only to search queries that have a word in the beginning (prefix), use the appropriate meta tag. For example:
 
@@ -101,7 +163,7 @@ In this function, you must prepare a list and display it using one of the follow
 
 The following functions are also available:
 
-* `drawer:add_buttons(icons, default_index)` - shows icons at the bottom of the menu (in `fa:icon_name` format), `default_index` is the index of the selected icon;
+* `drawer:add_buttons(icons, default_index)` - shows icons at the bottom of the menu (in raw `fa:icon_name` format, not `%%fa:icon_name%%`), `default_index` is the index of the selected icon;
 * `drawer:clear()` - clears the list;
 * `drawer:close()` - closes the menu;
 * `drawer:change_view(name)` - switches the menu to another script or display style (argument: either script file name, `sortable` or `categories`).
@@ -115,20 +177,26 @@ The list output functions support HTML and Markdown (see User Interface section 
 ## User Interface
 
 _Available only in widget scripts._
+
 _AIO Launcher also offers a way to create more complex UIs: [instructions](README_RICH_UI.md)_
 
-* `ui:show_text(string)` - displays plain text in widget, repeated call will erase previous text;
-* `ui:show_lines(table, [table], [folded_string])` - displays a list of lines with the sender (in the manner of a mail widget), the second argument (optional) - the corresponding senders (formatting in the style of a mail widget), folded\_string (optional) - string to be shown in folded mode;
-* `ui:show_table(table, [main_column], [centering], [folded_value])` - displays table, first argument: table of tables, second argument: main column, it will be stretched, occupying main table space (if argument is zero or not specified all table elements will be stretched evenly), third argument: boolean value indicating whether table cells should be centered, fourth argument: string or table to be shown in folded mode;
-* `ui:show_buttons(names, [colors])` - displays a list of buttons, the first argument is a table of strings, the second is an optional argument, a table of colors in the format #XXXXXX;
-* `ui:show_progress_bar(text, current_value, max_value, [color])` - shows the progress bar;
-* `ui:show_chart(points, [format], [title], [show_grid], [folded_string], [copyright])` - shows the chart, points - table of coordinate tables, format - data format (see below), title - chart name, show\_grid - grid display flag, folded\_string - string for the folded state (otherwise the name will be shown), copyright - string displayed in the lower right corner;
-* `ui:show_toast(string)` - shows informational message in Android style;
+Each of the functions below clears the widget window before displaying content, so you can only use one of them at a time.
+
+* `ui:show_text(string)` - displays rich text in widget, repeated call will erase previous text;
+* `ui:show_lines(table, [table])` - displays a list of rich text lines with the sender (in the manner of a mail widget), the second argument (optional) - the corresponding senders (formatting in the style of a mail widget);
+* `ui:show_table(table, [main_column], [centering])` - displays rich text table, first argument: table of tables, second argument: main column, it will be stretched, occupying main table space (if argument is zero or not specified all table elements will be stretched evenly), third argument: boolean value indicating whether table cells should be centered;
+* `ui:show_buttons(names, [colors])` - displays a list of rich text buttons, the first argument is a table of strings, the second is an optional argument, a table of colors in the format #XXXXXX. Button labels support HTML, Markdown, and icon markup described in the Icons section;
+* `ui:show_progress_bar(text, current_value, max_value, [color])` - shows the progress bar with a rich text label;
+* `ui:show_chart(points, [format], [title], [show_grid], [not_used], [copyright])` - shows the chart, points - table of coordinate tables, format - data format (see below), title - rich text chart name, show\_grid - grid display flag, copyright - rich text string displayed in the lower right corner;
+* `ui:show_image(uri)` - show image by URL;
+* `ui:show_toast(string)` - shows rich text informational message in Android style;
 * `ui:default_title()` - returns the standard widget title (set in the `name` metadata);
-* `ui:set_title()` - changes the title of the widget, should be called before the data display function (empty line - reset to the standard title);
-* `ui:set_folding_flag(boolean)` - sets the flag of the folded mode of the widget, the function should be called before the data display functions;
-* `ui:folding_flag()` - returns folding flag;
-* `ui:set_progress(float)` - sets current widget progress (like in Player and Health widgets).
+* `ui:set_title(string)` - changes the rich text title of the widget, should be called before the data display function (empty line - reset to the standard title);
+* `ui:set_expandable()` - shows expand button on widget update;
+* `ui:is_folded()` - check if widgets is folded;
+* `ui:is_expanded()` - checks if expanded mode is enabled;
+* `ui:set_progress(float)` - sets current widget progress (like in Player and Health widgets);
+* `ui:set_edit_mode_buttons(table)` - adds icons listed in the table (formatted as raw `"fa:name"`, not `"%%fa:name%%"`) to the edit mode. When an icon is clicked, the function `on_edit_mode_button_click(index)` will be called.
 
 The `ui:show_chart()` function takes a string as its third argument to format the x and y values on the screen. For example, the string `x: date y: number` means that the X-axis values should be formatted as dates, and the Y-values should be formatted as a regular number. There are four formats in total:
 
@@ -154,7 +222,7 @@ In this case, the `on_resume()` callback will be triggered each time the widget 
 
 ### HTML and Markdown formatting
 
-The functions `ui:show_text()`, `ui:show_lines()` and `ui:show_table()` support many HTML tags. For example:
+Text fields across the UI API support many HTML tags, including `ui:show_text()`, `ui:show_lines()`, `ui:show_table()` cells, `ui:show_buttons()`, `ui:show_progress_bar()`, `ui:show_chart()` titles/copyright, and `ui:set_title()`. For example:
 
 ```
 First line<br/> Second line
@@ -165,33 +233,55 @@ First line<br/> Second line
 
 You can also use Markdown markup. To do this, add the prefix `%%mkd%%` to the beginning of the line. Or you can disable the formatting completely with the prefix `%%txt%%`.
 
-_Keep in mind: HTML formatting and icons will not work if you use the second parameter in `ui:show_lines()`._
-
 ### Icons
 
-You can insert FontAwesome icons inside the text, to do this use this syntax: `%%fa:ICON_NAME%%. For example:
+You can insert FontAwesome icons inside any rich text field, including button labels. To do this use this syntax: `%%fa:ICON_NAME%%`. For example:
 
 ```
 ui:show_text("<b>This</b> is the text with icons %%fa:face-smile%% %%fa:poo%% <i>and styles</i>")
 ```
 
-The `ui:show_buttons()` function supports Fontawesome icons. Simply specify `fa:icon_name` as the button name, for example: `fa:play`.
+To align icons to a uniform width (like FontAwesome’s `fa-fw`), use `%%fa-fw:ICON_NAME%%`. This renders the icon in a fixed box (\~1.25em), which keeps lists and inline rows from shifting:
 
-_Note: AIO only supports icons up to Fontawesome 6.3.0._
+```
+ui:show_text("Aligned list: %%fa-fw:check%% Done  •  %%fa-fw:xmark%% Skip")
+```
+
+Inline icon markup is rich-text markup, not a general icon id. Use `%%fa:ICON_NAME%%`, `%%fa-fw:ICON_NAME%%`, and `%%weather:ICON_CODE:day|night%%` in text fields such as `ui:show_text()`, `ui:show_lines()`, `ui:show_table()` cells, `ui:show_buttons()`, `search:show_lines()`, `search:show_buttons()`, progress labels, chart titles, drawer list text, dialog text/buttons, toasts, and rich UI text/button elements.
+
+Dedicated icon parameters and icon-only controls use raw icon ids, not inline markup: `drawer:add_buttons()`, `ui:set_edit_mode_buttons()`, and rich UI icon elements. If you want an icon-only `ui:show_buttons()` or `search:show_buttons()` button, specify a raw id as the whole button name, for example `fa:play` or `weather:1:day`. For labeled buttons, prefer inline markup such as `%%fa-fw:play%% Play`.
+
+*Note: AIO only supports icons up to FontAwesome 6.3.0.*
+
+Weather condition icons use AIO Launcher's dedicated weather icon font, not FontAwesome. To insert a weather icon inside text, use this syntax:
+
+```
+ui:show_text("%%weather:1:day%% Sunny")
+ui:show_text("%%weather:1:night%% Clear night")
+```
+
+When rendering real weather data from `weather:get_by_hour(id)`, use `weather:icon(icon_code, [is_day])` and wrap the returned id with double percent signs:
+
+```
+local icon = weather:icon(hour.icon_code)
+ui:show_text("%%" .. icon .. "%% " .. temp_text)
+```
+
+Do not use FontAwesome icons such as `fa:sun`, `fa:cloud`, or `%%fa-fw:cloud-rain%%` for actual weather conditions.
 
 ## Dialogs
 
-_Available only in widget scripts._
+* `dialogs:show_dialog(title, text, [button1_text], [button2_text])` - show dialog, the first argument is the title, the second is the text, button1\_text is the name of the first button, button2\_text is the name of the second button;
+* `dialogs:show_edit_dialog(title, [text], [default_value])` - show the dialog with the input field: title - title, text - signature, default\_value - standard value of the input field;
+* `dialogs:show_radio_dialog (title, lines, [index])` - show a dialog with a choice: title - title, lines - table of lines, index - index of the default value;
+* `dialogs:show_checkbox_dialog(title, lines, [table])` - show dialog with selection of several elements: title - title, lines - table of lines, table - table default values;
+* `dialogs:show_list_dialog(prefs)` - shows dialog with list of data.
 
-* `ui:show_dialog(title, text, [button1_text], [button2_text])` - show dialog, the first argument is the title, the second is the text, button1\_text is the name of the first button, button2\_text is the name of the second button;
-* `ui:show_edit_dialog(title, [text], [default_value])` - show the dialog with the input field: title - title, text - signature, default\_value - standard value of the input field;
-* `ui:show_radio_dialog (title, lines, [index])` - show a dialog with a choice: title - title, lines - table of lines, index - index of the default value;
-* `ui:show_checkbox_dialog(title, lines, [table])` - show dialog with selection of several elements: title - title, lines - table of lines, table - table default values;
-* `ui:show_list_dialog(prefs)` - shows dialog with list of data.
-
-Dialog button clicks should be handled in the `on_dialog_action(number)` callback, where 1 is the first button, 2 is the second button, and -1 is nothing (dialog just closed). `ui:show_radio_dialog()` returns the index of the selected item or -1 in case the cancel button was pressed. `ui:show_checkbox_dialog()` returns the table of indexes or -1. `ui:show_edit_dialog()` returns text or -1.
+Dialog button clicks should be handled in the `on_dialog_action(number)` callback, where 1 is the first button, 2 is the second button, and -1 is nothing (dialog just closed). `dialogs:show_radio_dialog()` returns the index of the selected item or -1 in case the cancel button was pressed. `dialogs:show_checkbox_dialog()` returns the table of indexes or -1. `ui:show_edit_dialog()` returns text or -1.
 
 If the first argument of the dialog contains two lines separated by `\n`, the second line becomes a subtitle.
+
+Dialog titles, subtitles, button labels, and lines in `show_radio_dialog`, `show_checkbox_dialog`, and `show_list_dialog` support rich text and icon markup: `%%fa:ICON_NAME%%`, `%%fa-fw:ICON_NAME%%`, and `%%weather:ICON_CODE:day|night%%`. Use `%%fa-fw:%%` when all rows start with an icon to keep labels horizontally aligned.
 
 List dialog accepts table as argument:
 
@@ -205,9 +295,9 @@ List dialog accepts table as argument:
 
 ## Text editor
 
-_Avaialble from: 4.4.1_
+_Available from: 4.4.1_
 
-* `ui:show_rich_editor(prefs)` - show complex editor dialog with undo support, lists, time, colors support. It can be used to create notes and tasks style widgets.
+* `dialogs:show_rich_editor(prefs)` - show complex editor dialog with undo support, lists, time, colors support. It can be used to create notes and tasks style widgets.
 
 Dialog accepts table as argument:
 
@@ -250,11 +340,11 @@ ui:show_context_menu({
 
 Here `share`, `copy` and `trash` are the names of the icons, which can be found at [Fontawesome](https://fontawesome.com/).
 
-When you click on any menu item, the collback `on_context_menu_click(idx)` will be called, where `idx` is the index of the menu item.
+When you click on any menu item, the callback `on_context_menu_click(idx)` will be called, where `idx` is the index of the menu item.
 
 ## Meta widgets
 
-_Avaialble from: 4.7.0_
+_Available from: 4.7.0_
 
 * `ui:build(table)` - constructs a widget from pieces of other AIO widgets.
 
@@ -267,16 +357,37 @@ The function takes a command table of this format as a parameter:
 `traffic` - traffic progress bar;
 `screen` - screen time progress bar;
 `alarm` - next alarm info;
+`clock` - current time;
 `notes [NUM]` - last NUM notes;
 `tasks [NUM]` - last NUM tasks;
 `calendar [NUM]` - last NUM calendar events;
+`calendarw` - weekly calendar;
 `exchage [NUM] [FROM] [TO]` - exchange rate FROM currency TO currency;
 `player` - player controls;
-`health` - health data;
 `weather [NUM]` - weather forecast for NUM days;
 `worldclock [TIME_ZONE]` - time in the given TIME_ZONE;
 `notify [NUM]` - last NUM notifications;
 `dialogs [NUM]` - last NUM dialogs;
+`calculator` - calculator;
+`feed [NUM]` - news feed;
+`control` - control panel;
+`stopwatch` - stopwatch;
+`finance [NUM]` - finance tickers;
+`financechart` - finance chart;
+`contacts [NUM]` - contacts (number of lines);
+`apps [NUM]` - frequent apps (number of lines);
+`appbox [NUM]` - my apps (number of lines);
+`applist [NUM]` - apps list (number of lines);
+`appfolders [NUM]` - app folders;
+`appcategories [NUM]` - app categries;
+`timer` - timers;
+`mailbox [NUM]` - mail widget;
+`dialer` - dialer;
+`recorder` - recorder;
+`telegram` - telegram messages;
+`smartspacer` - SmartSpacer;
+`widgetscontainer` - widgets container;
+`tips` - tips;
 `text [TEXT]` - just shows TEXT;
 `space [NUM]` - NUM of spaces.
 ```
@@ -285,9 +396,9 @@ The function takes a command table of this format as a parameter:
 
 ## System
 
-* `system:open_browser(url)` - opens the specified URL in a browser or application that can handle this type of URL;
-* `system:exec(string)` - executes a shell command;
-* `system:su(string)` - executes a shell command as root;
+* `system:open_browser(url)` - opens the specified web URL in a browser or application that can handle this type of URL. For app links, Android settings, and other non-web intents, prefer the `intent` module helpers below;
+* `system:exec(string, [id])` - executes a shell command;
+* `system:su(string, [id])` - executes a shell command as root;
 * `system:location()` - returns the location in the table with two values (location request is NOT executed, the value previously saved by the system is used);
 * `system:request_location()` - queries the current location and returns it to the `on_location_result` callback;
 * `system:to_clipboard(string)` - copies the string to the clipboard;
@@ -296,18 +407,113 @@ The function takes a command table of this format as a parameter:
 * `system:alarm_sound(seconds)` - make alarm sound;
 * `system:share_text(string)` - opens the "Share" system dialog;
 * `system:lang()` - returns the language selected in the system;
+* `system:tz()` - returns TimeZone string (example: Africa/Cairo);
 * `system:tz_offset()` - returns TimeZone offset in seconds;
 * `system:currency()` - returns default currency code based on locale;
 * `system:format_date_localized(format, date)` - returns localized date string (using java formatting);
 * `system:battery_info()` - returns table with battery info;
-* `system:system_info()` - returns table with system info.
-
-The result of executing a shell command is sent to the `on_shell_result(string)` callback.
-
-* `system:show_notify(table)` - show system notifycation;
+* `system:system_info()` - returns table with system info;
+* `system:brightness_state()` - returns current screen brightness state;
+* `system:network_state()` - deprecated legacy active/default network snapshot; use the split methods below for new scripts;
+* `system:internet_state()` - returns internet capability/validation for the active network;
+* `system:active_network_state()` - returns active/default network transport details;
+* `system:wifi_state()` - returns honest Wi-Fi visibility state;
+* `system:mobile_state()` - returns honest cellular visibility state;
+* `system:bluetooth_state()` - returns honest Bluetooth limitation state;
+* `system:show_notify(table)` - show system notification;
 * `system:cancel_notify()` - cancel notification.
 
-These two functions can be used to display, update, and delete system notifications. The possible fields for the `table` (each of them is optional) are:
+The result of executing a shell command is sent to the `on_shell_result(string)` or `on_shell_result_$id(string)` (_starting from AIO 5.7.5_) callback.
+
+Battery info table:
+
+```
+`present` - `true` if a battery is present;
+`charging` - `true` if the battery is charging;
+`source` - charging source string;
+`percent` - battery charge percent;
+`health` - battery health string;
+`technology` - battery technology string;
+`temp` - battery temperature in Celsius;
+`voltage` - battery voltage;
+`power_saver` - `true` if power saver mode is enabled.
+```
+
+System info table:
+
+```
+`device` - device name;
+`connection` - current network class;
+`android_version` - Android version;
+`aio_version` - AIO Launcher version;
+`mem_total` - total RAM as a human-readable string;
+`mem_available` - available RAM as a human-readable string;
+`storage_total` - total internal storage as a human-readable string;
+`storage_available` - available internal storage as a human-readable string;
+`sdcard_total` - total external storage as a human-readable string;
+`sdcard_available` - available external storage as a human-readable string.
+```
+
+Brightness state table:
+
+```
+`level` - current brightness level;
+`max` - maximum brightness level;
+`percent` - brightness percent from 0 to 100;
+`fraction` - brightness fraction from 0.0 to 1.0;
+`is_auto` - `true` if automatic brightness is enabled;
+`sensor_available` - `true` if the device has a light sensor.
+```
+
+Network state helpers:
+
+`system:network_state()` is deprecated. It describes only the active/default network and must not be used to infer whether Wi-Fi, mobile data, SIM, or Bluetooth is turned off. New scripts should use the split helpers below.
+
+```lua
+local internet = system:internet_state()
+-- internet.connected : boolean, active network has INTERNET capability
+-- internet.validated : boolean, Android verified real internet access
+-- internet.transport : "wifi" | "cellular" | "ethernet" | "vpn" | "bluetooth" | "unknown" | "none"
+-- internet.metered   : boolean
+-- internet.roaming   : boolean
+
+local net = system:active_network_state()
+-- net.type           : "wifi" | "cellular" | "ethernet" | "vpn" | "bluetooth" | "unknown" | "none"
+-- net.class          : "WiFi" | "2G" | "3G" | "4G" | "5G" | "Ethernet" | "VPN" | "Bluetooth" | ""
+-- net.name           : Wi-Fi SSID or cellular operator only when available for the active network
+-- net.name_available : boolean
+-- net.connected      : boolean, active network has INTERNET capability
+-- net.validated      : boolean, Android verified real internet access
+-- net.metered        : boolean
+-- net.roaming        : boolean
+
+local wifi = system:wifi_state()
+-- wifi.state          : "active" | "not_active" | "unknown"
+-- wifi.ssid           : SSID only when active and available
+-- wifi.ssid_available : boolean
+-- wifi.can_toggle     : false
+-- wifi.settings       : "wifi"
+-- wifi.limitation     : "toggle_restricted"
+
+local mobile = system:mobile_state()
+-- mobile.state              : "active" | "not_active" | "unknown"
+-- mobile.class              : "2G" | "3G" | "4G" | "5G" only when active
+-- mobile.operator           : operator only when active and available
+-- mobile.operator_available : boolean
+-- mobile.can_toggle         : false
+-- mobile.settings           : "network"
+-- mobile.limitation         : "toggle_restricted"
+
+local bt = system:bluetooth_state()
+-- bt.state      : "unknown"
+-- bt.can_toggle : false
+-- bt.settings   : "bluetooth"
+-- bt.limitation : "not_exposed"
+```
+
+`state = "not_active"` means the radio is not the active/default network, not that it is turned off. Scripts cannot toggle Wi-Fi, Bluetooth, mobile data, or choose a data SIM through these APIs; open Android settings instead.
+
+`system:show_notify(table)` and `system:cancel_notify()` can be used to display, update, and delete system notifications. The possible fields for the `table` (each of them is optional) are:
 
 ```
 `message` - the message displayed in the notification;
@@ -321,10 +527,113 @@ When the notification is clicked, the main launcher window will open. When one o
 
 _Keep in mind that the callback will only be executed for scripts of type `widget`._
 
+## Usage statistics
+
+_Available from: 7.2.0_
+
+The `usage` module reads Android app usage statistics.
+
+* `usage:state()` - returns permission/support state;
+* `usage:request_permission([callback_name])` - opens Usage Access settings and optionally calls `callback_name(granted)`;
+* `usage:stats([options])` - returns app usage statistics.
+
+`usage:stats()` returns the string `permission_error` when Usage Access is not granted.
+
+Usage Access settings do not provide an Android result callback. If `callback_name` is supplied, AIO calls it with the current permission state; scripts should also re-check `usage:state()` from `on_resume()` after the user returns from settings.
+
+State table:
+
+```
+`supported` - `true` if usage stats are supported on this Android version;
+`has_permission` - `true` if Usage Access is granted.
+```
+
+Options for `usage:stats(options)`:
+
+```
+`start_time` - start of the range as Unix time in seconds (default: start of today);
+`end_time` - end of the range as Unix time in seconds (default: now);
+`limit` - maximum number of apps to return, from 1 to 50 (default: 10).
+```
+
+Stats table:
+
+```
+`supported` - `true` if usage stats are supported;
+`has_permission` - `true` if Usage Access is granted;
+`start_time` - actual range start in seconds;
+`end_time` - actual range end in seconds;
+`screen_time_ms` - screen time in milliseconds;
+`screen_time_seconds` - screen time in seconds;
+`total_app_time_ms` - total visible app time in milliseconds;
+`total_app_time_seconds` - total visible app time in seconds;
+`apps` - table of app usage rows.
+```
+
+App usage row format:
+
+```
+`package` - app package name;
+`package_name` - same package name, kept for convenience;
+`name` - app display name;
+`time_ms` - visible time in milliseconds;
+`time_seconds` - visible time in seconds;
+`percent` - app share of total visible app time.
+```
+
+## Traffic counters
+
+_Available from: 7.2.0_
+
+The `traffic` module reads network traffic counters used by the Traffic widget.
+
+* `traffic:state()` - returns support and permission state;
+* `traffic:request_permission([callback_name])` - requests required permissions and optionally calls `callback_name(granted)`;
+* `traffic:counters([options])` - returns traffic counters.
+
+`traffic:counters()` returns the string `permission_error` when the required permissions are not granted.
+
+Traffic counters need Usage Access and phone state permission. `traffic:request_permission()` may open Usage Access settings; re-check `traffic:state()` from `on_resume()` after the user returns.
+
+State table:
+
+```
+`supported` - `true` if traffic counters are supported on this Android version;
+`has_permission` - `true` if all required permissions are granted;
+`has_usage_permission` - `true` if Usage Access is granted;
+`has_phone_permission` - `true` if phone state permission is granted.
+```
+
+Options for `traffic:counters(options)`:
+
+```
+`sim_id` - SIM id to use, or -1 for device totals;
+`billing_day` - first day of the billing period, 1..31.
+```
+
+Counters table:
+
+```
+`supported` - `true` if traffic counters are supported;
+`has_permission` - `true` if all required permissions are granted;
+`has_usage_permission` - `true` if Usage Access is granted;
+`has_phone_permission` - `true` if phone state permission is granted;
+`today_used_bytes` - traffic used today;
+`period_used_bytes` - traffic used in the current billing period;
+`month_used_bytes` - same value as `period_used_bytes`;
+`limit_bytes` - configured traffic limit in bytes;
+`billing_day` - billing day used for the calculation;
+`sim_id` - SIM id used for the calculation;
+`is_online` - `true` if a network connection is active.
+```
+
 ## Intents
 
 * `intent:start_activity(table)` - starts activity with intent described in the table;
 * `intent:send_broadcast(table)` - sends broadcast intent described in the table.
+* `intent:open_uri(uri)` - opens a normal URI or deep link with Android `ACTION_VIEW`. Use it for `https:`, `mailto:`, `tel:`, `geo:`, `market:`, and known app links. Do not use Android `intent:#Intent;...` strings here;
+* `intent:open_app_settings(package)` - opens the Android app-info/settings screen for the given package, for example `intent:open_app_settings("com.whatsapp")`;
+* `intent:open_system_settings(name)` - opens a supported Android settings screen by simple name: `settings`, `wifi`, `bluetooth`, `network`, `mobile_network`, `location`, `display`, `sound`, `accessibility`, `battery`, `battery_saver`, `notifications`, `apps`, `manage_apps`, `date`, `security`, `storage`, `nfc`, or `usage_access`;
 
 Intent table format (all fields are optional):
 
@@ -334,6 +643,7 @@ Intent table format (all fields are optional):
 * `component` - Explicitly set the component to handle the intent;
 * `type` - mime type;
 * `data` - data this intent is operating on;
+* `flags` - integer Android intent flag bitmask, or a table of integer flag values to combine;
 * `extras` - table of extra values in `key = value` format.
 
 ## Launcher control
@@ -346,12 +656,27 @@ Intent table format (all fields are optional):
 * `aio:fold_widget(string, [boolean])` - fold/unfold widget (if you do not specify the second argument the state will be switched) (_available from: 4.5.0_);
 * `aio:is_widget_added(string)` - checks if the widget is added to the screen;
 * `aio:self_name()` - returns current script file name (_available from: 4.5.0_);
-* `aio:send_message(value, [script_name])` - sends lua value to other script or scripts (_avaialble from: 4.5.0_);
+* `aio:send_message(value, [script_name], [offline])` - sends lua value to other script or scripts; if `offline` is true and the target search/drawer script is not active, the last message will be stored and delivered when the script starts (only works when `script_name` is provided);
 * `aio:colors()` - returns table with current theme colors;
 * `aio:do_action(string)` - performs an AIO action ([more](https://aiolauncher.app/api.html));
 * `aio:actions()` - returns a list of available actions;
 * `aio:settings()` - returns a list of available AIO Settings sections;
-* `aio:open_settings([section])` - open AIO Settings or AIO Settings section.
+* `aio:add_todo(icon, text)` - add a TODO item with the specified Fontawesome icon and text;
+* `aio:open_settings([section])` - open AIO Settings or AIO Settings section;
+* `aio:open_notifications_panel()` - opens the system notifications panel (same as swiping down the status bar);
+* `aio:open_side_menu()` - opens the launcher’s app drawer;
+* `aio:open_search([query])` - opens the launcher search screen; if `query` is provided, the search field will be pre-filled with this text;
+* `aio:show_toast(string)` - shows informational message in Android style;
+* `aio:launcher_info()` - returns basic information about the AIO Launcher build:
+
+```lua
+local info = aio:launcher_info()
+-- info.package    : package name (e.g. "ru.execbit.aiolauncher")
+-- info.version    : version name (e.g. "6.0.1")
+-- info.code       : version code (longVersionCode)
+-- info.build_type : build type (e.g. "release", "debug", "beta")
+-- info.beta       : true if this is not a "release" build
+```
 
 Format of table elements returned by `aio:available_widgets()`:
 
@@ -382,6 +707,22 @@ Format of table elements returned by `aio:actions()`:
 `args` - action arguments if any.
 ```
 
+Format of table elements returned by `aio:colors()`:
+
+```
+`primary_text` – base text color;
+`secondary_text` – color for secondary text (e.g., sender name, time, etc.);
+`button` – button background color;
+`button_text` – text color inside buttons;
+`progress` – general progress bar color;
+`progress_good` – color for positive progress states (e.g., full battery or charging);
+`progress_bad` – color for negative progress states (e.g., battery level below 15%);
+`enabled_icon` – color for enabled icons (see the Control Panel widget);
+`disabled_icon` – color for disabled icons (see the Control Panel widget);
+`accent` – accent color;
+`badge` – badge color.
+```
+
 To accept a value sent by the `send_message` function, the receiving script must implement a callback `on_message(value)`.
 
 The script can track screen operations such as adding, removing or moving a widget with the `on_widget_action()` callback. For example:
@@ -394,7 +735,7 @@ end
 
 This function will be called on add, remove or move any widget.
 
-It is also possible to process an swiping to right action (if this action is selected in the settings). To do this, create a function `on_action`:
+It is also possible to process an swipe to right action (if this action is selected in the settings). To do this, create a function `on_action`:
 
 ```
 function on_action()
@@ -416,9 +757,15 @@ end
 * `apps:app(package_name)` - return the table of the given application;
 * `apps:launch(package)` - launches the application;
 * `apps:show_edit_dialog(package)` - shows edit dialog of the application;
-* `apps:categories()` - returns a table of category tables.
+* `apps:categories()` - returns a table of category tables;
+* `apps:set_hidden(package, hidden)` - hides or unhides an application;
+* `apps:set_category(package, category_id)` - moves an application to a category;
+* `apps:set_name(package, name)` - changes custom application name;
+* `apps:set_color(package, color)` - changes custom application color;
+* `apps:set_tags(package, tags)` - changes application tags, where `tags` is a table of strings;
+* `apps:list([sort_by], [no_hidden])` - deprecated compatibility shortcut that returns package names only.
 
-The format of the apps table:
+The format of the app table:
 
 ```
 `pkg` - name of the app package (if it is cloned app or Android for Work app package name will also contain user id, like that: `com.example.app:123`);
@@ -427,6 +774,7 @@ The format of the apps table:
 `hidden` - true if the application is hidden;
 `suspended` - true if the application is suspended;
 `category_id` - category ID;
+`tags` - array of tags;
 `badge` - number on the badge;
 `icon` - icon of the application in the form of a link (can be used in the side menu scripts).
 ```
@@ -448,33 +796,84 @@ Sorting options:
 * `launch_time` - by launch time;
 * `install_time` - by installation time.
 
+`apps:set_hidden()`, `apps:set_category()`, `apps:set_name()`, `apps:set_color()`, and `apps:set_tags()` return a status table:
+
+```
+`ok` - `true` on success, `false` on error;
+`error` - error string when `ok` is `false` (for example: `app_not_found`).
+```
+
 Any application-related events (installation, removal, name change, etc.) will call the `on_apps_changed()` callback (_not in the search scripts_).
 
 ## Network
 
-* `http:get(url, [id])` - executes an HTTP GET request, `id` - the request identifier string (see below);
-* `http:post(url, body, media_type, [id])` - executes an HTTP POST request;
-* `http:put(url, body, media_type, [id])` - executes an HTTP request;
-* `http:delete(url, [id])` - executes an HTTP DELETE request;
-* `http:set_headers(table)` - sets the headers for **all** subsequent network requests; the argument is a table with strings like "Cache-Control: no-cache".
+* `http:get(url, [id])` — executes an HTTP **GET** request.
+* `http:post(url, body, media_type, [id])` — executes an HTTP **POST** request.
+* `http:put(url, body, media_type, [id])` — executes an HTTP **PUT** request.
+* `http:delete(url, [id])` — executes an HTTP **DELETE** request.
+* `http:set_headers(table)` — sets custom headers for **all subsequent** requests; the argument is a table of strings in the form `"Header-Name: value"`.
+* `http:set_certificate_verification(enabled)` — enables or disables HTTPS certificate verification for **all subsequent** requests. Verification is enabled by default. Disabling it is unsafe and should only be used for local devices, self-signed certificates, or debugging.
 
-These functions do not return any value, but instead call the `on_network_result(string, [code])` callback. The first argument is the body of the response, the second (optional) is the code (200, 404, etc.).
+These functions do not return values directly. After a request finishes, one of the callbacks below will be invoked.
 
-If `id` was specified in the request, then the function will call `on_network_result_$id(string, [code])` instead of the callback described above. That is, if the id is "server1", then the callback will look like `on_network_result_server1(string, [code])`.
+### Response callbacks
 
-If there is a problem with the network, the `on_network_error_$id` callback will be called. But it does not have to be processed.
+If no `id` was provided, the callback is:
+
+```
+on_network_result(body, code, headers)
+```
+
+If an `id` was provided, the callback name becomes:
+
+```
+on_network_result_<id>(body, code, headers)
+```
+
+Callback parameters:
+
+* **body** — string containing the response body;
+* **code** — HTTP status code (200, 404, etc.);
+* **headers** — Lua table containing response headers.
+
+Header names are lowercase (`"content-type"`, `"location"`).
+If a header has multiple values, they are joined with `", "`.
+
+### Error callbacks
+
+If a network error occurs, one of the following callbacks is invoked:
+
+```
+on_network_error(error_message)
+```
+
+or, if an `id` was provided:
+
+```
+on_network_error_<id>(error_message)
+```
+
+Handling this callback is optional.
 
 ## Calendar
 
-* `calendar:events([start_date], [end_date], [cal_table])` - returns table of event tables of all calendars, start\_date - event start date, end\_date - event end date, cal\_table - calendar ID table (function will return the string `permission_error` if the launcher does not have permissions to read the calendar);
-* `calendar:request_permission()` - requests access rights to the calendar;
+* `calendar:events([start_date], [end_date], [cal_table])` - returns table of event tables of all calendars, start_date - event start date, end_date - event end date, cal_table - calendar ID table (function will return the string `permission_error` if the launcher does not have permissions to read the calendar);
 * `calendar:calendars()` - returns table of calendars tables;
-* `calendar:show_event_dialog(id)` - shows the event dialog;
-* `calendar:open_event(id|event_table)` - opens an event in the system calendar;
+* `calendar:request_permission([callback_name])` - requests access rights to the calendar and optionally calls `callback_name(granted)`;
+* `calendar:show_event_dialog(id|event_table)` - shows the event dialog;
+* `calendar:open_event(id)` - opens an event in the system calendar;
 * `calendar:open_new_event([start], [end])` - opens a new event in the calendar, `start` - start date of the event in seconds, `end` - end date of the event;
-* `calendar:add_event(event_table)` - adds event to the system calendar.
+* `calendar:add_event(event_table)` - legacy method that adds an event to the system calendar and returns the created event id, or `permission_error`;
+* `calendar:create_event(event_table)` - creates an event and returns a status table with `id`;
+* `calendar:update_event(event_table)` - updates an event and returns a status table;
+* `calendar:delete_event(id)` - deletes an event and returns a status table;
+* `calendar:share_event(id)` - opens the system share sheet for an event and returns a status table;
+* `calendar:is_holiday(date)` - returns true if the given date is a holiday or a weekend;
+* `calendar:enabled_calendar_ids()` - returns list of calendar IDs enabled in the builtin Calendar widget settings.
 
 Event table format:
+
+Since AIO Launcher 7.2.0, event time fields are named `begin_time` and `end_time`. Older versions used `begin` and `end`.
 
 ```
 `id` - event ID;
@@ -482,12 +881,14 @@ Event table format:
 `title` - title of the event;
 `description` - description of the event;
 `color` - color of the event;
-`status` - status string of the event or empty;
+`status` - status string of the event or empty (`tentative`, `confirmed`, `canceled`);
 `location` - address of the event by string;
-`begin` - start time of the event (in seconds);
-`end` - time of the event end (in seconds);
+`begin_time` - start time of the event (in seconds);
+`end_time` - time of the event end (in seconds);
 `all_day` - boolean value, which means that the event lasts all day.
 ```
+
+`calendar:create_event()` requires `calendar_id`, `begin_time`, and `end_time`; optional text fields such as `title` and `description` default to empty strings. `calendar:update_event()` requires `id` and updates the fields that are present in the table.
 
 Calendar table format:
 
@@ -497,12 +898,28 @@ Calendar table format:
 `color` - color of the calendar in the format #XXXXXXXX.
 ```
 
-The function `calendar:request_permission()` calls `on_permission_granted()` callback if the user agrees to grant permission.
+Status table returned by `calendar:create_event()`, `calendar:update_event()`, `calendar:delete_event()`, and `calendar:share_event()`:
+
+```
+`ok` - `true` on success, `false` on error;
+`id` - created event id, only for `calendar:create_event()`;
+`error` - error string when `ok` is `false` (for example: `permission_error`).
+```
+
+If `calendar:request_permission()` is called without a callback name, it calls `on_permission_granted()` after the user grants permission. If a callback name is supplied, the callback receives one boolean argument:
+
+```lua
+calendar:request_permission("on_calendar_permission")
+
+function on_calendar_permission(granted)
+    ui:show_toast("Calendar permission: " .. tostring(granted))
+end
+```
 
 ## Phone
 
-* `phone:contacts()` - returns table of phone contacts (function will return the string `permission_error` if the launcher does not have permissions to read the calendar);
-* `phone:request_permission()` - requests access rights to the contacts;
+* `phone:contacts()` - returns table of phone contacts (function will return the string `permission_error` if the launcher does not have permissions to read contacts);
+* `phone:request_permission([callback_name])` - requests access rights to contacts and optionally calls `callback_name(granted)`;
 * `phone:make_call(number)` - dial the number in the dialer;
 * `phone:send_sms(number, [text])` - open SMS application and enter the number, optionally enter text;
 * `phone:show_contact_dialog(id|lookup_key)` - open contact dialog;
@@ -518,13 +935,66 @@ Contacts table format:
 `icon` - contact icon in the form of a link (can be used in the side menu scripts).
 ```
 
-The function `phone:request_permission()` calls `on_permission_granted()` callback if the user agrees to grant permission.
+If `phone:request_permission()` is called without a callback name, it calls `on_permission_granted()` after the user grants permission. If a callback name is supplied, the callback receives one boolean argument.
 
 Upon the first launch of the application, contacts may not yet be loaded, so in the scripts, you can use the `on_contacts_loaded()` callback, which will be called after the contacts are fully loaded.
 
+## Countries
+
+* `countries:get(code)` - returns country by 2-letter ISO code (case-insensitive) or nil;
+* `countries:get_by_alpha3(code)` - returns country by 3-letter ISO code or nil;
+* `countries:get_by_name(name)` - returns first match by name (partial, case-insensitive) or nil;
+* `countries:search(query)` - returns list of matching countries (sorted by name);
+* `countries:by_region(region)` - returns list of countries in a region (sorted by name);
+* `countries:by_dial_code(code)` - returns list of countries by dial code (e.g., "+1" or "1");
+* `countries:regions()` - returns list of region names (sorted);
+* `countries:count()` - returns total number of countries;
+* `countries:all()` - returns full list of countries.
+
+Country table format:
+
+```
+`name` - country name;
+`alpha2` - 2-letter ISO code;
+`alpha3` - 3-letter ISO code;
+`country_code` - numeric country code;
+`iso_3166` - ISO 3166-2 code;
+`region` - region name;
+`sub_region` - sub-region name;
+`intermediate_region` - intermediate region name;
+`region_code` - region code;
+`sub_region_code` - sub-region code;
+`intermediate_region_code` - intermediate region code;
+`dial_code` - international dial code;
+`geonameid` - GeoNames ID;
+`capital` - capital city;
+`currency` - currency name;
+`language_codes` - comma-separated language codes;
+`area_km2` - area in square kilometers;
+`gdp` - GDP in USD;
+`bounding_box` - table with bounding box coordinates.
+```
+
+Bounding box format:
+
+```
+`sw_lat` - southwest latitude;
+`sw_lon` - southwest longitude;
+`ne_lat` - northeast latitude;
+`ne_lon` - northeast longitude.
+```
+
+Notes:
+
+* Country codes are case-insensitive
+* Search queries support partial matching
+* All arrays are sorted by country name
+* Empty strings are returned for missing optional fields
+* The database contains 240+ countries and territories
+
 ## Tasks
 
-_Avaialble from: 4.8.0_
+_Available from: 4.8.0_
 
 * `tasks:load()` - loads tasks;
 * `tasks:add(task_table)` - adds the task described in the table;
@@ -549,7 +1019,7 @@ The format of the task table:
 
 ## Notes
 
-_Avaialble from: 4.8.0_
+_Available from: 4.8.0_
 
 * `notes:load()` - loads notes;
 * `notes:add(note_table)` - adds the note described in the table;
@@ -569,45 +1039,339 @@ The format of the note table:
 `position` - note position on the screen.
 ```
 
+## Timers
+
+_Available from: 6.3.0_
+
+* `timer:start(milliseconds)` - starts a timer for the specified duration in milliseconds;
+* `timer:stop_all()` - stops all active timers;
+* `timer:list()` - returns a table of timers;
+* `timer:is_active()` - returns `true` if at least one timer is active.
+
+Timer table format:
+
+```
+`total_ms` - timer duration in milliseconds;
+`current_ms` - remaining time in milliseconds;
+`active` - `true` if timer is running;
+`auto_destroy` - `true` if timer will be removed automatically after finish.
+```
+
+`timer:start(...)` returns a status table:
+
+```
+`ok` - `true` on success, `false` on error;
+`error` - error string when `ok` is `false` (for example: `invalid_duration`).
+```
+
+There is no API for stopping or deleting one specific timer from scripts. Use
+`timer:stop_all()` when a script needs a stop action.
+
+## Player
+
+_Available from: 6.3.0_
+
+* `player:state()` - returns current media player state;
+* `player:has_permission()` - returns `true` if notification listener permission is granted;
+* `player:open_permission_settings()` - opens Android notification listener settings;
+* `player:play_pause()` - toggles play/pause;
+* `player:next()` - skips to next track;
+* `player:prev()` - skips to previous track;
+* `player:stop()` - stops playback;
+* `player:open_app()` - opens the current player application;
+* `player:seek(seconds)` - seeks relative to the current position by the specified number of seconds;
+* `player:seek_plus_15s()` - seeks forward by 15 seconds;
+* `player:seek_minus_15s()` - seeks backward by 15 seconds;
+* `player:custom_actions()` - returns available custom media actions;
+* `player:custom_action(id)` - runs a custom media action by id;
+* `player:can_like()` - returns `true` if the current player exposes a like action;
+* `player:is_liked()` - returns `true` if the current media item is liked;
+* `player:like()` - runs the player like action.
+
+Player state table format:
+
+```
+`is_playing` - `true` if media is playing now;
+`package` - package name of active player app (or empty string);
+`song` - current track title (or empty string);
+`custom_actions_count` - number of available custom media actions;
+`can_like` - `true` if a like action is available;
+`is_liked` - `true` if the current media item is liked.
+```
+
+Custom action table format:
+
+```
+`id` - action id, starting from 1;
+`title` - action display title;
+`action` - raw Android action string.
+```
+
+`player:seek()`, `player:custom_action()`, and `player:like()` return a status table:
+
+```
+`ok` - `true` on success, `false` on error;
+`error` - error string when `ok` is `false` (for example: `action_not_found`, `unavailable`).
+```
+
+## Currencies
+
+_Available from: 6.3.0_
+
+* `currencies:supported()` - returns a list of supported currency codes (`"USD"`, `"EUR"`, etc.);
+* `currencies:rate(from, to, [amount])` - returns converted amount or `nil` if rate is unavailable;
+* `currencies:refresh([id])` - updates rates asynchronously.
+
+`currencies:rate(...)` notes:
+
+* `from` and `to` should be 3-letter currency codes;
+* `amount` defaults to `1.0`;
+* if rate is not found, function returns `nil`.
+
+`currencies:refresh(...)` callback:
+
+* without id: `on_currencies_result(result)`
+* with id: `on_currencies_result_<id>(result)`
+
+Result table format:
+
+```
+`ok` - `true` on success;
+`updated_count` - number of loaded rates;
+`last_update` - last update timestamp in seconds;
+`error` - error message when `ok` is `false`.
+```
+
+## Finance
+
+_Available from: 6.3.0_
+
+* `finance:price(symbol)` - returns current ticker price as number or `nil` if unavailable;
+* `finance:search(query, [id])` - searches symbols asynchronously;
+* `finance:company(symbol, [id])` - loads company info asynchronously;
+* `finance:chart(symbol, [id])` - loads chart data asynchronously.
+
+Callbacks:
+
+* `on_finance_search[_<id>](result)`
+* `on_finance_company[_<id>](result)`
+* `on_finance_chart[_<id>](result)`
+
+Callback result format:
+
+```
+`ok` - `true` on success;
+`data` - payload for search/company/chart;
+`error` - error message when `ok` is `false`.
+```
+
+## Recorder
+
+_Available from: 6.3.0_
+
+* `recorder:request_permission([callback_name])` - requests microphone recording permission and optionally calls `callback_name(granted)`;
+* `recorder:state()` - returns recorder state;
+* `recorder:list()` - returns list of recordings;
+* `recorder:start()` - starts recording;
+* `recorder:stop_all()` - stops all active recordings;
+* `recorder:stop_record(id)` - stops one active recording;
+* `recorder:play(id)` - starts playback of a recording;
+* `recorder:stop_play(id)` - stops playback of a recording;
+* `recorder:delete(id)` - deletes a recording;
+* `recorder:share(id)` - opens the system share sheet for a recording;
+* `recorder:transcribe(id)` - transcribes a recording asynchronously;
+* `recorder:rename(id, name)` - renames recording;
+* `recorder:set_color(id, color)` - changes recording color.
+
+Recorder state table format:
+
+```
+`has_permission` - `true` if microphone recording permission is granted;
+`active` - `true` if recorder is active (recording or playing);
+`records_count` - number of available records.
+```
+
+Recording item format:
+
+```
+`id` - recording id (string, based on start time);
+`name` - display name;
+`duration` - duration in milliseconds;
+`recorded` - `true` if recording is completed;
+`recording` - `true` if currently recording;
+`playing` - `true` if currently playing;
+`color` - color id/int.
+```
+
+Mutating methods (`start`, `stop_record`, `play`, `stop_play`, `delete`, `share`, `rename`, `set_color`) return status table:
+
+```
+`ok` - `true` on success;
+`error` - error code/message when `ok` is `false` (for example: `permission_denied`, `record_not_found`).
+```
+
+`recorder:transcribe(id)` returns the result in this callback:
+
+```lua
+function on_recorder_transcription(id, text, error)
+    if error then
+        ui:show_toast("Transcription failed: " .. error)
+    else
+        ui:show_text(text)
+    end
+end
+```
+
+If `recorder:request_permission()` is called without a callback name, it calls `on_permission_granted()` after the user grants permission. If a callback name is supplied, the callback receives one boolean argument.
+
+## News
+
+_Available from: 7.1.1_
+
+The `news` module loads the same regional and world news sources that are used by Today.
+
+* `news:regional()` - loads regional news;
+* `news:world()` - loads world news;
+* `news:all()` - loads both regional and world news.
+
+All three functions are asynchronous and return results in the same callback: `on_news_result(items)`.
+The `items` table is sorted by date, newest first.
+
+News item format:
+
+```
+`time` - Unix timestamp in seconds;
+`title` - headline string;
+`text` - summary/description string;
+`url` - article URL string, can be nil;
+`source` - localized source label;
+`scope` - `"regional"` or `"world"`.
+```
+
+Example:
+
+```
+local rows = {}
+
+function on_alarm()
+    news:all()
+end
+
+function on_news_result(items)
+    rows = {}
+    local lines = {}
+
+    if type(items) ~= "table" or #items == 0 then
+        ui:show_text("No news")
+        return
+    end
+
+    for _, item in ipairs(items) do
+        local title = tostring(item.title or "")
+        if title ~= "" then
+            table.insert(lines, title)
+            table.insert(rows, item)
+        end
+    end
+
+    ui:show_lines(lines)
+end
+
+function on_click(index)
+    local item = rows[index]
+    if item and item.url then
+        system:open_browser(item.url)
+    end
+end
+```
+
 ## Weather
 
-_Avaialble from: 4.1.0_
+_Available from: 4.1.0_
 
-* `weather:get_by_hour()` - performs hourly weather query.
+* `weather:get_by_hour([id])` - performs hourly weather query and delivers the result to `on_weather_result(result)` or, when `id` is passed, to `on_weather_result_<id>(result)`;
+* `weather:icon(icon_code, [is_day])` - returns an AIO weather icon id such as `weather:1:day` or `weather:1:night`. The optional `is_day` boolean controls day/night glyphs; when omitted, AIO uses the current day/night state.
 
-Function returns the weather data in the `on_weather_result(result)` callback, where `result` is a table of tables with the following fields:
+Callbacks:
+
+* `on_weather_result(result)` - result of `weather:get_by_hour()` calls without an id;
+* `on_weather_result_<id>(result)` - result of `weather:get_by_hour(id)` calls with an id;
+
+Hourly weather row format:
 
 ```
 `time` - time in seconds;
-`temp` - temperature;
+`temp` - temperature in Celsius;
 `icon_code` - code of weather icon;
 `humidity` - humidity;
+`pressure` - pressure;
 `wind_speed` - wind speed;
-`wind_direction` - wind direction.
+`wind_direction` - wind direction;
+`city` - city name.
+```
+
+Use `weather:icon()` to render `icon_code` with AIO's weather icon font:
+
+```
+function on_load()
+    weather:get_by_hour("weather_demo")
+end
+
+function on_weather_result_weather_demo(result)
+    if not result or #result == 0 then
+        ui:show_text("No weather data")
+        return
+    end
+
+    local hour = result[1]
+    local icon = weather:icon(hour.icon_code)
+    local temp = math.floor((hour.temp or 0) + 0.5) .. " C"
+    ui:show_text("%%" .. icon .. "%% " .. temp)
+end
+```
+
+In rich UI layouts, the returned icon id can also be used as an icon element:
+
+```
+{"icon", weather:icon(hour.icon_code), {size = 24}}
 ```
 
 ## Cloud
 
-_Avaialble from: 4.1.0_
+_Available from: 4.1.0_
 
 * `cloud:get_metadata(path)` - returns a table with file metadata;
 * `cloud:get_file(path)` - returns the contents of the file;
-* `cloud:put_file(sting, path)` - writes a string to the file;
+* `cloud:put_file(string, path)` - writes a string to the file;
 * `cloud:remove_file(path)` - deletes file;
 * `cloud:list_dir(path)` - returns metadata table of all files and subdirectories;
 * `cloud:create_dir(path)` - creates directory;
 
 All data are returned in `on_cloud_result(meta, content)`. The first argument is the metadata, either a metadata table (in the case of `list_dir()`) or an error message string. The second argument is the contents of the file (in the case of `get_file()`).
 
+## Profiles
+
+_Available from: 5.3.6._
+
+* `profiles:list()` - returns a list of saved profiles;
+* `profiles:dump(name)` - saves a new profile with the specified name;
+* `profiles:restore(name)` - restores the saved profile;
+* `profiles:remove(name)` - removes a saved profile and returns `true` on success;
+* `profiles:dump_json()` - creates a new profile but instead of saving it, returns it as a JSON string;
+* `profiles:restore_json(json)` - restores a profile previously saved using `dump_json()`;
+* `profiles:current()` - returns current profile name.
+
 ## AI
 
-_Avaialble from: 5.3.5._
+_Available from: 5.3.5._
+
 _Requires subscription._
 
-* `ai:complete(text)` - send message to the AI;
-* `ai:translate(text, lang)` - translate text to the language with code `lang` (`en`, `de`, `es` etc).
+* `ai:complete(text, [id])` - send message to the AI. If `id` is supplied, the result is returned with the same request id in `on_ai_result(id, text, error)`;
+* `ai:translate(text, lang)` - translate text to the language with code `lang` (`en`, `de`, `es` etc);
+* `ai:transcribe(uri, [file_name], [id])` - transcribe an audio file by `content://` or `file://` URI. The optional `file_name` helps AIO detect the audio type (`.m4a`, `.3gp`, `.mp3`, `.wav`). If `id` is supplied, the result is returned with the same request id in `on_ai_result(id, text, error)`.
 
-All functions return an answer in the callback `on_ai_answer`. For example:
+When `ai:complete()` is called without `id`, and when `ai:translate()` is used, the answer is returned in the legacy callback `on_ai_answer`. For example:
 
 ```
 function on_alarm()
@@ -619,22 +1383,62 @@ function on_ai_answer(answer)
 end
 ```
 
-_Keep in mind that the launcher imposes certain limitations on the use of this module. If you use it too frequently, you will receive an `error: rate limit` instead of a response. Additionally, an error will be returned if the request includes too much text._
+The request-id based functions return the result in `on_ai_result(id, text, error)`. `text` is `nil` on failure, and `error` is a string error code or message.
+
+```
+function on_alarm()
+    ai:complete("Summarize today's notifications in one sentence", "summary")
+end
+
+function on_ai_result(id, text, error)
+    if error then
+        ui:show_text("AI error: " .. error)
+        return
+    end
+
+    ui:show_text(text)
+end
+```
+
+To transcribe an audio file selected by the user:
+
+```
+function on_load()
+    files:pick_file("audio/*")
+end
+
+function on_file_picked(uri, name)
+    ai:transcribe(uri, name, "voice")
+end
+
+function on_ai_result(id, text, error)
+    if id ~= "voice" then return end
+    ui:show_text(error or text)
+end
+```
+
+_Keep in mind that the launcher imposes certain limitations on the use of this module. If you use it too frequently, the legacy callback will receive `error: rate limit`, and `on_ai_result()` will receive `rate limit` in its `error` argument. Additionally, an error will be returned if the request includes too much text or the audio file is too large._
 
 ## Reading notifications
 
 _Available only in widget scripts._
-_Avaialble from: 4.1.3._
+
+_Available from: 4.1.3._
 
 _This module is intended for reading notifications from other applications. To send notifications, use the `system` module._
 
-* `notify:request_current()` - requests current notifications from the launcher;
+* `notify:list()` - returns list of current notifications as table of tables;
+* `notify:has_permission()` - returns `true` if notification listener permission is granted;
+* `notify:open_permission_settings()` - opens Android notification listener settings;
 * `notify:open(key)` - opens notification with specified key;
 * `notify:close(key)` - removes the notification with the specified key;
+* `notify:snooze(key, millis)` - snoozes the notification;
 * `notify:do_action(key, action_id)` - sends notification action (_available from: 4.1.5_);
-* `notify:consumed(key)` - mark notification as consumed so built-in Notifications widget will not show it;
+* `notify:reply(key, action_id, text)` - sends text to a notification action with remote input and returns a status table.
 
-The `notify:request_current()` function asks for all current notifications. The Launcher returns them one by one to the `on_notify_posted(table)` callback, where table is the table representing the notification. The same callback will be called when a new notification appears. When the notification is closed, the `on_notify_removed(table)` colbeck will be called.
+The launcher triggers callback when a notification is received or removed:
+
+* `on_notifications_updated()` - notification list changed;
 
 Notification table format:
 
@@ -648,6 +1452,8 @@ Notification table format:
 `title` - notification title;
 `text` - notification text;
 `sub_text` - additional notification text;
+`info_text` - notification info text;
+`summary_text` - notification summary text;
 `big_text` - extended notification text;
 `is_clearable` - true, if the notification is clearable;
 `group_id` - notification group ID;
@@ -655,17 +1461,91 @@ Notification table format:
 `actions` - table notifications actions with fields: `id`, `title`, `have_input` (_available from: 4.1.5_);
 ```
 
-Keep in mind that the AIO Launcher also calls `request_current()` every time you return to the launcher, which means that all scripts will also get notification information in the `on_notify_posted()` callback every time you return to the desktop.
+Use `action.id` from the notification action table as `action_id` for `notify:do_action()` and `notify:reply()`.
+
+`notify:reply()` returns a status table:
+
+```
+`ok` - `true` on success, `false` on error;
+`error` - error string when `ok` is `false` (for example: `notification_not_found`, `remote_input_not_found`).
+```
+
+Keep in mind that the AIO Launcher also request current notifications every time you return to the launcher, which means that all scripts will also get the `on_notifications_updated()` callback called.
 
 ## Files
 
-_Avaialble from: 4.1.3_
+*Available from: 4.1.3*
 
-* `files:read(name)` - returns file contents or `nil` if file does not exist;
-* `files:write(name, string)` - writes `string` to file (creates file if file does not exist);
+* `files:read(name)` - returns file contents or `nil` if the file does not exist;
+* `files:write(name, string)` - writes a string to a file (creates it if needed);
 * `files:delete(name)` - deletes the file;
+* `files:list()` - returns a table of script files;
+* `files:stat(name)` - returns metadata for a script file.
 
-All files are created in the subdirectory `/sdcard/Android/data/ru.execbit.aiolauncher/files/scripts` without ability to create subdirectories.
+All files created by scripts are stored in:
+
+```
+/sdcard/Android/data/ru.execbit.aiolauncher/files/scripts
+```
+
+Subdirectories are not supported. Slashes in file names are stripped to the last path component.
+
+File metadata table format:
+
+```
+`name` - file name;
+`size` - file size in bytes, or 0 if it does not exist;
+`last_modified` - last modification time as Unix time in seconds, or 0 if it does not exist;
+`is_dir` - `true` if the file is a directory;
+`exists` - `true` if the file exists, only returned by `files:stat()`.
+```
+
+## External files
+
+*Available from: 6.0.2*
+
+Scripts may request a system file picker:
+
+* `files:pick_file([mime])` - opens the picker (e.g. `"image/*"`, `"text/*"`, `"*/*"`);
+* `files:create_file([mime], [name])` - opens the system create-file dialog;
+* `files:read_uri(uri)` - reads text from a file referenced by a content URI;
+* `files:write_uri(uri, string)` - writes text to a file referenced by a content URI.
+
+After the user selects a file, the callback is invoked:
+
+```
+on_file_picked(uri, name)
+```
+
+After the user creates a file, the callback is invoked:
+
+```
+on_file_created(uri, name)
+```
+
+Callback parameters:
+
+* `uri` - Android content URI of the selected or created file.
+* `name` - display name returned by the system.
+
+Example:
+
+```lua
+files:pick_file("text/*")
+
+function on_file_picked(uri, name)
+    local content = files:read_uri(uri)
+    ui:show_text(content or "Cannot read file: " .. name)
+end
+
+function export_text()
+    files:create_file("text/plain", "aio-export.txt")
+end
+
+function on_file_created(uri, name)
+    files:write_uri(uri, "Hello from AIO Launcher")
+end
+```
 
 ## Rich UI
 
@@ -704,20 +1584,33 @@ Sample:
 ```
 prefs = require "prefs"
 
+function on_load()
+  if prefs.foo == nil then prefs.foo = "bar" end
+end
+
 function on_resume()
     prefs.new_key = "Hello"
     ui:show_lines{prefs.new_key}
 end
 ```
 
-The `new_key` will be present in the table even after the AIO Launcher has been restrated.
+The `new_key` will be present in the table even after the AIO Launcher has been restarted.
 
-The `show_dialog()` method automatically creates a window of current settings from fields defined in prefs. The window will display all fields with a text key and a value of one of three types: string, number, or boolean. All other fields of different types will be omittedi. Fields whose names start with an underscore will also be omitted. Script will be reloaded on settings save.
+The `show_dialog()` method automatically creates a window of current settings from fields defined in prefs. The window will display all fields with a text key and a value of one of three types: string, number, or boolean. All other fields of different types will be omitted. Fields whose names start with an underscore will also be omitted. Script will be reloaded on settings save.
+
+Starting from version 5.5.2, you can change the order of fields in the dialog by simply specifying the order in `prefs._dialog_order`. For example:
+
+```
+prefs._dialog_order = "message,start_time,end_time"
+```
+
+Note: the `prefs` module is intended for storing settings as key-value pairs. For storing data, it’s better to use direct file saving through the `files` module.
 
 ## Animation and real time updates
 
 _Available only in widget scripts._
-_Avaialble from: 4.5.2_
+
+_Available from: 4.5.2_
 
 The scripts API is designed in a way that every function that changes a widget's UI updates the entire interface. This approach makes the API as simple and convenient as possible for quick scripting, but it also prevents the creation of more complex scripts that change the UI state very often.
 
@@ -729,14 +1622,14 @@ There are two modules to solve this problem: `morph` and `anim`. The first is us
 * `morph:run_with_delay(delay, function)` - populates specified Lua function with delay `delay`;
 * `morph:cancel(idx)` - cancels a previously run change if it is not yet complete (e.g., delay or animation is not over).
 * `anim:blink(idx)` - blinks UI element with index `idx`;
-* `anim:move(x, y, [delay])` - moves element sideways by specified number of DP and returns back after delay;
+* `anim:move(idx, x, y, [delay])` - moves element sideways by specified number of DP and returns back after delay;
 * `anim:heartbeat(idx)` - animation of heartbeat;
 * `anim:shake(idx)` - shake animation;
 * `anim:cancel(idx)` - cancel the running animation.
 
 ## Functions
 
-_Avaialble from: 4.1.3_
+_Available from: 4.1.3_
 
 * `utils:md5(string)` - returns md5-hash of string (array of bytes);
 * `utils:sha256(string)` - returns sha256-hash of string (array of bytes);
@@ -745,11 +1638,11 @@ _Avaialble from: 4.1.3_
 
 ## Tasker
 
-_Avaialble from: 4.4.4_
+_Available from: 4.4.4_
 
 * `tasker:tasks([project])` - returns a list of all the tasks in the Tasker, the second optional argument is the project for which you want to get the tasks (returns nil if Tasker is not installed or enabled);
 * `tasker:projects()` - returns all Tasker projects (returns nil if Tasker is not installed or enabled);
-* `tasker:run_task(name, [args])` - executes the task in the Tasker, the second optional argument is a table of variables passed to the task in the format `{ "name" = "value" }`;
+* `tasker:run_task(name, [args])` - executes the task in the Tasker, the second optional argument is a table of variables passed to the task in the format `{ name = "value" }`;
 * `tasker:run_own_task(commands)` - constructs and performs the task on the fly;
 * `tasker:send_command(command)` - sends [tasker command](https://tasker.joaoapps.com/commandsystem.html).
 
@@ -790,6 +1683,7 @@ The standard Lua API is extended with the following features:
 * `string:trim()` - removes leading and trailing spaces from the string;
 * `string:starts_with(substring)` - returns true if the string starts with the specified substring;
 * `string:ends_with(substring)` - returns true if the string ends with the specified substring;
+* `string:contains(substring)` - returns true if the string contains the specified literal substring; the substring is not treated as a Lua pattern;
 * `slice(table, start, end)` - returns the part of the table starting with the `start` index and ending with `end` index;
 * `index(table, value)` - returns the index of the table element;
 * `key(table, value)` - returns the key of the table element;
@@ -798,6 +1692,8 @@ The standard Lua API is extended with the following features:
 * `serialize(table)` - serializes the table into executable Lua code;
 * `round(x, n)` - rounds the number;
 * `map(function, table)`, `filter(function, table)`, `head(table)`, `tail(table)`, `reduce(function, table)` - several convenience functional utilities form Haskell, Python etc.
+
+The method table used by receiver calls such as `text:trim()` is launcher-owned and protected. Each script still has its own `string` table, but assigning `string.custom_method` or declaring `function string:custom_method()` affects only that table and does not add a receiver method. Define custom helpers as local functions instead. The built-in string extensions listed above remain available through receiver calls.
 
 AIO Launcher also includes:
 
@@ -819,12 +1715,12 @@ In order for AIO Launcher to correctly display information about the script in t
 
 ```
 -- name = "Covid info"
+-- icon = "fontawesome_icon_name"
 -- description = "Cases of illness and death from covid"
 -- data_source = "https://covid19api.com"
--- arguments_help = "Specify the country code"
--- arguments_default = "RU"
 -- type = "widget"
--- foldable = "false"
+-- foldable = "true"
+-- private_mode = "false"
 -- author = "Evgeny Zobnin (zobnin@gmail.com)"
 -- version = "1.0"
 ```
@@ -855,8 +1751,7 @@ end
 Some tips on writing and debugging scripts:
 
 * The most convenient way to upload scripts to your smartphone is to use the `install-scripts.sh` script from this repository. This is a sh script for UNIX systems which loads all the scripts from the repository onto the (virtual) memory card of the smartphone using ADB. You can edit it to your liking.
-* The easiest way to reload an updated widget script is to swipe the widget to the right and then press the "reload" button. The search scripts will be reloaded automatically next time you open the search window.
-* Since version 4.3.0 AIO Launcher supports widget scripts hot reloading. To enable it, go to AIO Settings -> About and click on the version number 7 times. Then open AIO Settings -> Testing and enable the option "Hot reload scripts on resume". Now when you change the script, it will be automatically reloaded when you return to the desktop.
+* When you change the script, it will be automatically reloaded when you return to the desktop. The search scripts will be reloaded automatically next time you open the search window.
 * Since version 4.4.2 AIO Launcher includes `debug` module with methods: `debug:log(text)`, `debug:toast(text)` and `debug:dialog(text)`;
 * Since version 4.8.0 you can use `--testing = "true"` meta tag. In this case, launcher will gray out the script and place it at the end of the list in the side menu.
 

@@ -1,10 +1,16 @@
 -- name = "Android widgets dumper"
+-- foldable = false
 
 -- Place app package name with widget here
-app_pkg = "com.weather.Weather"
+app_pkg = "com.google.android.googlequicksearchbox"
+--app_pkg = "com.weather.Weather"
 --app_pkg = "com.google.android.apps.tasks"
 --app_pkg = "com.android.chrome"
 --app_pkg = "com.whatsapp"
+
+-- Widget size (string from "1x1" to "4x4")
+-- In most cases you can use nil
+widget_size = "4x1"
 
 -- Globals
 labels = {}
@@ -28,14 +34,14 @@ function on_resume()
     if wid < 0 then
         ui:show_lines(labels)
     else
-        widgets:request_updates(wid)
+        widgets:request_updates(wid, widget_size)
     end
 end
 
 function on_click(idx)
     if w_content == "" then
         wid = widgets:setup(providers[idx])
-        widgets:request_updates(wid)
+        widgets:request_updates(wid, widget_size)
     else
         system:copy_to_clipboard(w_content)
     end
